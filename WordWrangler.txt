@@ -1,0 +1,375 @@
+"""
+Word Wrangler game
+
+-TG 26/06/2015(modifed oct/2015)
+
+-project for PoC course by Rice University
+https://www.coursera.org/course/principlescomputing2
+-Word Wrangler template 
+http://www.codeskulptor.org/#poc_wrangler_template.py
+
+#Be patient, it may take up to 20 seconds to load 
+the words and/or dictionary. 
+
+- enable pop-up windows!!
+
+-Hit PLAY icon to Start
+(left top corner)
+"""
+
+import urllib2
+import codeskulptor
+import simplegui
+
+# Used to increase the timeout, if necessary
+codeskulptor.set_timeout(20)
+
+WORDFILE = "assets_scrabble_words3.txt"
+
+"""
+Word Wrangler GUI
+"""
+# Global constants
+FONT_SIZE = 20
+OFFSET = 4
+ROW_HEIGHT = FONT_SIZE + OFFSET
+COLUMN_WIDTH = 80
+GRID_SIZE = [25, 4]
+CANVAS_WIDTH = COLUMN_WIDTH * GRID_SIZE[1]
+CANVAS_HEIGHT = ROW_HEIGHT * GRID_SIZE[0]
+
+
+def draw_word(canvas, word, pos):
+    """
+    Helper function to draw word on canvas at given position
+    """
+    box = [pos, 
+           [pos[0], pos[1] - ROW_HEIGHT], 
+           [pos[0] + COLUMN_WIDTH, pos[1] - ROW_HEIGHT], 
+           [pos[0] + COLUMN_WIDTH, pos[1]], 
+           pos]
+    canvas.draw_text(word, [pos[0] + 2, pos[1] - 4], FONT_SIZE, "White")
+    canvas.draw_polyline(box, 1, "White")
+
+class WordWranglerGUI:
+    """
+    Container for interactive content
+    """    
+
+    def __init__(self, game):
+        """ 
+        Create frame and timers, register event handlers
+        """
+        self.game = game
+        self.frame = simplegui.create_frame("Word Wrangler", 
+                                            CANVAS_WIDTH, CANVAS_HEIGHT, 250)
+        self.frame.set_canvas_background("Blue")        
+               
+        self.enter_input = self.frame.add_input("Enter word for new game and hit enter", 
+                                                self.enter_start_word, 250)
+        labelmsg = "Stars correspond to hidden words formed using letters "
+        labelmsg += "from the entered word. Hidden words are listed in alphabetical order."
+        self.frame.add_label(labelmsg, 250)
+        self.frame.add_label("", 250)
+        self.guess_label = self.frame.add_input("Enter your guess word and hit enter", 
+                                                self.enter_guess, 250)       
+        self.frame.add_label("For a hint, click on a starred word", 250)
+        self.frame.add_label("", 250)
+        self.frame.add_label("only english 'abc' letters are accepted!", 250)
+        self.frame.set_mouseclick_handler(self.peek)
+        self.frame.set_draw_handler(self.draw)
+
+        self.enter_input.set_text("python")
+        self.game.start_game("python")
+        
+    def start(self):
+        """
+        Start frame
+        """
+        self.frame.start()
+        
+    def enter_start_word(self, entered_word):
+        """ 
+        Event handler for input field to enter letters for new game
+        """
+        self.game.start_game(entered_word.strip().lower())
+
+    def enter_guess(self, guess):
+        """ 
+        Event handler for input field to enter guess
+        """
+        self.game.enter_guess(guess.strip().lower())
+        self.guess_label.set_text("")
+
+    def peek(self, pos):
+        """ 
+        Event handler for mouse click, exposes clicked word
+        """
+        [index_i, index_j] = [pos[1] // ROW_HEIGHT, pos[0] // COLUMN_WIDTH]
+        peek_idx = index_i + index_j * GRID_SIZE[0]
+        if peek_idx < len(self.game.get_strings()):
+            self.game.peek(peek_idx)
+                         
+    def draw(self, canvas):
+        """
+        Handler for drawing subset words list
+        """
+        string_list = self.game.get_strings()
+        
+        for col in range(GRID_SIZE[1]):
+            for row in range(GRID_SIZE[0]):
+                pos = [col * COLUMN_WIDTH, (row + 1) * ROW_HEIGHT]
+                idx = row + col * GRID_SIZE[0]
+                if idx < len(string_list):
+                    draw_word(canvas, string_list[idx], pos)                      
+
+            
+# Start interactive simulation    
+def run_gui(game):
+    """
+    Encapsulate frame
+    """
+    gui = WordWranglerGUI(game)
+    gui.start()
+
+"""
+Provided code for Word Wrangler game
+"""
+class WordWrangler:
+    """
+    Game class for Word Wrangler
+    """
+    
+    def __init__(self, word_list, remdup, intersect, mergesort, substrs):
+        self._word_list = word_list
+        self._subset_strings = []
+        self._guessed_strings = []
+
+        self._remove_duplicates = remdup
+        self._intersect = intersect
+        self._merge_sort = mergesort
+        self._substrs = substrs
+
+    def start_game(self, entered_word):
+        """
+        Start a new game of Word Wrangler
+        """
+        if entered_word not in self._word_list:
+            print "Not a word, try again"
+            return
+        
+        strings = self._substrs(entered_word)
+        sorted_strings = self._merge_sort(strings)
+        all_strings = self._remove_duplicates(sorted_strings)
+        self._subset_strings = self._intersect(self._word_list, all_strings)
+        self._guessed_strings = []        
+        for word in self._subset_strings:
+            self._guessed_strings.append("*" * len(word))
+        self.enter_guess(entered_word)           
+        
+    def enter_guess(self, guess):
+        """
+        Take an entered guess and update the game
+        """        
+        if ((guess in self._subset_strings) and 
+            (guess not in self._guessed_strings)):
+            guess_idx = self._subset_strings.index(guess)
+            self._guessed_strings[guess_idx] = self._subset_strings[guess_idx]
+
+    def peek(self, peek_index):
+        """
+        Exposed a word given in index into the list self._subset_strings
+        """
+        self.enter_guess(self._subset_strings[peek_index])
+        
+    def get_strings(self):
+        """
+        Return the list of strings for the GUI
+        """
+        return self._guessed_strings
+
+    
+"""
+student code for Word Wrangler game
+"""
+
+# Functions to manipulate ordered word lists
+def remove_duplicates(list1):
+    """
+    Eliminate duplicates in a sorted list.
+    Returns a new sorted list with the same elements in list1, but
+    with no duplicates.
+
+    This function can be iterative, (you should not use set, sorted, or sort).
+    """
+    no_duplicates_list = []
+
+    if list1:
+        no_duplicates_list.append(list1[0])
+        for item in list(list1[1:]):
+            if item != no_duplicates_list[-1]:
+                no_duplicates_list.append(item)
+            
+    return no_duplicates_list
+
+def intersect(list1, list2):
+    """
+    Compute the intersection of two sorted lists.
+    Returns a new sorted list containing only elements that are in
+    both list1 and list2.
+
+    This function can be iterative, (you should not use set, sorted, or sort).
+    """
+    
+######## iterative ########
+
+    intersection_list = []
+    
+    list1_idx = 0
+    list2_idx = 0
+
+    while list2_idx < len(list2) and list1_idx < len(list1): 
+        
+        if list2[list2_idx] == list1[list1_idx]:
+            intersection_list.append(list2[list2_idx])
+            list1_idx += 1
+            list2_idx += 1
+            
+        elif list2[list2_idx] > list1[list1_idx]:
+            list1_idx += 1
+        else:
+            list2_idx += 1
+    
+    return intersection_list
+
+######## recursive ######## 
+
+#    # base case; one or both lists are empty
+#    if not list2 or not list1:
+#        return []
+#    else:
+#        if list2[0] == list1[0]:
+#            return [list2[0]] + intersect(list1[1:], list2[1:])
+#        
+#        elif list2[0] > list1[0]:
+#            return intersect(list1[1:], list2)
+#        else:
+#            return intersect(list1, list2[1:])
+  
+    
+# Functions to perform merge sort
+def merge(list1, list2):
+    """
+    Merge two sorted lists.
+    Returns a new sorted list containing all of the elements that
+    are in either list1 and list2.
+
+    This function can be iterative,(you should not use set, sorted, or sort).
+    """   
+       
+######## iterative ########
+
+    merged_list = []
+    temp_list1 = list(list1)
+    temp_list2 = list(list2)
+
+    while temp_list1 and temp_list2:
+        if temp_list1[0] < temp_list2[0]:
+            merged_list.append(temp_list1.pop(0))
+        else:
+            merged_list.append(temp_list2.pop(0))
+        
+    return merged_list + temp_list1 + temp_list2
+
+######## recursive ######## 
+
+#    # base case; one or both lists are empty
+#    if not list1 or not list2:
+#        return list1 + list2
+#    else:
+#        item1 = list(list1)
+#        item2 = list(list2)
+#    
+#        if item1[0] > item2[0]:
+#            return [item2.pop(0)] + merge(item1, item2)
+#        else:
+#            return [item1.pop(0)] + merge(item1, item2)
+        
+                
+def merge_sort(list1):
+    """
+    Sort the elements of list1.
+    Return a new sorted list with the same elements as list1.
+
+    This function should be recursive.
+    """
+    
+    # base case; empty list or only one element
+    if len(list1) < 2:
+        return list1
+    
+    else:
+        divide_point = len(list1) // 2
+        left_list = list(list1[:divide_point])
+        right_list = list(list1[divide_point:])
+        sorted_list = merge(merge_sort(left_list), merge_sort(right_list))
+        
+        return sorted_list
+
+# Function to generate all strings for the word wrangler game
+
+def gen_all_strings(word):
+    """
+    Generate all strings that can be composed from the letters in word
+    in any order.
+
+    Returns a list of all strings that can be formed from the letters
+    in word.
+
+    This function should be recursive.
+    """
+    if word == "":
+        return [""]
+    else:
+        first = word[0]
+        rest_word = word[1:]
+        rest_strings = gen_all_strings(rest_word)
+        all_strings = []
+
+        for string in rest_strings:
+            for letter_pos in range(len(string) +1):
+                all_strings.append(string[0:letter_pos] + \
+                                   first + string[letter_pos:])
+
+        return all_strings + rest_strings
+
+# Function to load words from a file
+
+def load_words(filename):
+    """
+    Load word list from the file named filename.
+
+    Returns a list of strings.
+    """
+    
+    url = codeskulptor.file2url(filename)
+    netfile = urllib2.urlopen(url)
+    words_file = netfile.readlines()
+    
+    words = [word[:-2] for word in words_file]
+    
+    return words
+
+def run():
+    """
+    Run game.
+    """
+    words = load_words(WORDFILE)
+    words.sort()
+    wrangler = WordWrangler(words, remove_duplicates, 
+                                     intersect, merge_sort, 
+                                     gen_all_strings)
+    run_gui(wrangler)
+
+#run the game        
+run()
